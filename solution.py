@@ -1,29 +1,63 @@
 """
-Solution (in progress) to the riddle:
+Solution to the riddle:
 
-* Adversary gives A five unordered cards out of a deck of 52
-* A chooses four cards out of the five, puts them in any order, and gives them
+* Adversary gives Player A five cards out of a deck of 52.
+* A selects four cards out of the five, puts them in any order, and gives them
     to B.
-* B must name A's remaining card
-* Find a strategy for A and B that always allows them to do this.
+* B must name A's remaining card.
+* (Find a strategy for A and B that always allows them to do this.)
 
-The basic idea (in progress) is this:
-* Represent cards by numbers between 0 and 51
+-------------------------------------------------------------------------------
+This module defines functions a_encode and b_decode implementing our solution,
+which can be verified correct in all (52 choose 5) cases with:
+    python checker.py.
+
+To run the unit tests in this module's docstrings:
+    python -m doctest -v solution.py
+-------------------------------------------------------------------------------
+
+Our basic idea is this:
+
+* Represent cards by numbers between 0 and 51 (suits and face values are
+    incidental).
 * There are 24 permutations of four cards. When A passes B four cards, B has
-    to distinguish between 48 remaining cards. That is, independent of the four
-    cards selected by A, the ordering is enough to transmit all but ONE bit of
-    information needed by B.
-* The remaining task is to encode one bit of information in the selection task.
-    A has five choices here, but encoding one bit of information in a uniform
-    way across all (52 choose 5) is subtle.
-* Outline... TODO
+    to distinguish between 48 remaining cards. That is, the ordering alone is
+    enough to transmit all but ONE bit of information needed by B.
+* Then the remaining task is to encode one independent bit of information in
+    the selection task. A has five choices here, but encoding one bit of
+    information in a uniform way across all (52 choose 5) possibilities is
+    subtle.
+
+A more detailed outline of encoding via selection:
+
+* View the cards as points on a circle mod 52, with "gaps" between them.
+* Invariant: for any set of five cards, the gaps sum to 47, and in particular
+    this sum is odd.
+* Ignoring rotation, there are only four possible cases for a sequence of five
+    gaps on a circle summing to an odd number:
+    - 1. all five odd (11111)
+    - 2. just one odd (00001)
+    - 3. three odd with the two even gaps adjacent to each other (00111)
+    - 4. three odd with the two even gaps separated from one another (01011)
+* If a card between two gaps of the same parity is removed, then these two gaps
+    merge to form an odd gap (the card itself adds one).
+* Beyond these facts, our choices are largely arbitrary, but here's one set of
+    choices that works:
+    - A will always merge gaps of the same parity, and will merge odd gaps when
+        possible (every case but 2 above).
+    - 1. B sees gap se...
+
+
+    I think there may be a much simpler way to do this actually, where A always
+    merges an odd gap and something after, so we just know the offset is odd
+    (going around the circle in "increasing" order).
+
 
 Run doc tests on command line with:
     python -m doctest -v solution.py
 """
 
 import itertools as it
-import funcy
 from collections import namedtuple
 
 # Represent cards by the numbers 0 to 51 inclusive
@@ -32,7 +66,7 @@ from collections import namedtuple
 PERMS_4 = tuple(it.permutations((0, 1, 2, 3)))
 PERM_4_TO_INDEX = {p: i for i, p in enumerate(PERMS_4)}
 
-def get_permutation(cards):
+def get_permutation(ordered_cards):
     """
     Return permutation caputuring the order of the cards. Examples:
     >>> get_permutation((5, 6, 7, 8))
@@ -42,19 +76,19 @@ def get_permutation(cards):
     >>> get_permutation((21, 34, 8, 4))
     (2, 3, 1, 0)
     """
-    p = [None] * len(cards)
-    for i, c in enumerate(sorted(cards)):
-        p[cards.index(c)] = i
+    p = [None] * len(ordered_cards)
+    for i, c in enumerate(sorted(ordered_cards)):
+        p[ordered_cards.index(c)] = i
     return tuple(p)
 
-def apply_permutation(cards, perm):
+def apply_permutation(sorted_cards, perm):
     """
     Apply a permutation to a tuple of cards. Example / property:
     >>> cards = (21, 34, 8, 4)
     >>> apply_permutation(sorted(cards), get_permutation(cards)) == cards
     True
     """
-    return tuple(cards[i] for i in perm)
+    return tuple(sorted_cards[i] for i in perm)
 
 def find_gaps(sorted_cards):
     """
@@ -88,6 +122,13 @@ def parities(nums):
 def rotate(sequence, step=1):
     return sequence[step:] + sequence[:step]
 
+def rotations(sequence):
+    curr = sequence
+    yield curr
+    for _ in range(len(sequence)-1):
+        curr = rotate(curr)
+        yield curr
+
 CaseAndRot = namedtuple("CaseAndRot", "par_case rot_num")
 
 def find_gap_parity_case(sorted_cards):
@@ -108,7 +149,7 @@ def find_gap_parity_case(sorted_cards):
     else:
         raise ValueError("Expected sequence of length 4 or 5; got {}".format(sorted_cards))
     gaps = find_gaps(sorted_cards)
-    parity_rotations = funcy.take(n, funcy.iterate(rotate, parities(gaps)))
+    parity_rotations = rotations(parities(gaps))
     for rot_num, par_case in enumerate(parity_rotations):
         if par_case in gap_parity_cases:
             return CaseAndRot(par_case=par_case, rot_num=rot_num)
@@ -116,63 +157,40 @@ def find_gap_parity_case(sorted_cards):
 
 # Encoding cases!
 
-def possible_cards_between(start, end, odd_offset=True):
-    if end < start:
-        end += 52
-    real_start = start + 2 if odd_offset else start + 1
-    return [x % 52 for x in range(real_start, end, 2)]
-
-def possible_cards_0101(sorted_four):
-    """
-    >>> possible_cards_0101((3, 4, 12, 47))
-    [6, 8, 10, 49, 51, 1]
-    """
-    s = sorted_four
-    gap_parities = parities(find_gaps(s))
-    if gap_parities == (0, 1, 0, 1):
-        return possible_cards_between(s[1], s[2]) + possible_cards_between(s[3], s[0])
-    elif gap_parities == (1, 0, 1, 0):
-        return possible_cards_between(s[0], s[1]) + possible_cards_between(s[2], s[3])
-    else:
-        raise ValueError("Bad gaps for 0101")
-
-def a_encode_01011(five_cards, rot_num=None): # TODO: what do I want to do about rot_num parameter?
-    if rot_num is None:
-        rot_num = find_gap_parity_case(five_cards).rot_num
-    rotated_hand = rotate(five_cards, rot_num)
-    drop_one = rotated_hand[-1] # merges the two odd gaps
-    select_four = rotated_hand[:-1]
-    sorted_four = tuple(sorted(select_four))
-    poss = possible_cards(sorted_four)
-    i = poss.index(drop_one)
-    return apply_permutation(sorted_four, PERMS_4[i])
+PAR_5_CASE_TO_DROP_INDEX = {
+    (0, 1, 0, 1, 1): 4, # merge odd gaps at end
+    (1, 1, 1, 1, 1): 1, # merge odd gaps at beginning
+    (0, 0, 0, 0, 1): 3, # merge EVEN gaps before odd
+    (0, 0, 1, 1, 1): 4  # merge odd gaps at end
+}
 
 def drop_select(seq, index):
     drop = seq[index]
     select = seq[:index] + seq[index+1:]
     return (drop, select)
 
-def a_encode(five_cards):
-    par_case, rot_num = find_gap_parity_case(five_cards)
-    rotated_hand = rotate(five_cards, rot_num)
-    if par_case == (0, 1, 0, 1, 1): # merge odd gaps at end
-        drop_index = 4
-    elif par_case == (1, 1, 1, 1, 1): # merge odd gaps at beginning
-        drop_index = 1
-    elif par_case == (0, 0, 0, 0, 1): # merge *even* gaps before odd
-        drop_index = 3
-    elif par_case == (0, 0, 1, 1, 1): # merge odd gaps at end
-        drop_index = 4
-    else:
-        raise ValueError("Unrecognized par_case {}".format(par_case))
-    drop_one, select_four = drop_select(rotated_hand, drop_index)
+def a_encode(sorted_five):
+    """
+    A's main encoding function.
+    """
+    par_case, rot_num = find_gap_parity_case(sorted_five)
+    rotated_hand = rotate(sorted_five, rot_num)
+    drop_one, select_four = drop_select(rotated_hand, PAR_5_CASE_TO_DROP_INDEX[par_case])
     sorted_four = tuple(sorted(select_four))
     poss = possible_cards(sorted_four)
     i = poss.index(drop_one)
     return apply_permutation(sorted_four, PERMS_4[i])
 
+def possible_cards_between(start, end, odd_offset=True):
+    if end < start:
+        end += 52
+    real_start = start + 2 if odd_offset else start + 1
+    return [x % 52 for x in range(real_start, end, 2)]
+
 def possible_cards(sorted_four):
     """
+    A list of the possible cards (in order) that a selection of four cards
+    could represent.
     >>> possible_cards((3, 4, 12, 47)) # case 0101
     [6, 8, 10, 49, 51, 1]
     >>> possible_cards((6, 10, 20, 47)) # case 0011
@@ -189,16 +207,16 @@ def possible_cards(sorted_four):
     else:
         raise ValueError("Problem with input {}. par_case={}, rot_num={}".format(sorted_four, par_case, rot_num))
 
-
-def b_decode(four_cards):
+def b_decode(ordered_four):
     """
-    >>> a_encode_01011((3, 4, 8, 12, 47), 3) # (kinda annoying to provide num_rot=3)
+    B's main decoding funcion.
+    >>> a_encode((3, 4, 8, 12, 47))
     (3, 4, 47, 12)
     >>> b_decode(_)
     8
     """
-    perm = get_permutation(four_cards)
+    perm = get_permutation(ordered_four)
     i = PERM_4_TO_INDEX[perm]
-    sorted_four = tuple(sorted(four_cards))
+    sorted_four = tuple(sorted(ordered_four))
     cards = possible_cards(sorted_four)
     return cards[i]
