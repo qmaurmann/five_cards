@@ -143,15 +143,52 @@ def a_encode_01011(five_cards, rot_num=None): # TODO: what do I want to do about
     drop_one = rotated_hand[-1] # merges the two odd gaps
     select_four = rotated_hand[:-1]
     sorted_four = tuple(sorted(select_four))
-    poss = possible_cards_0101(sorted_four)
+    poss = possible_cards(sorted_four)
     i = poss.index(drop_one)
     return apply_permutation(sorted_four, PERMS_4[i])
 
-PAR_4_CASE_TO_POSS_FN = {
-    (0, 0, 1, 1): None, # TODO
-    (0, 1, 0, 1): possible_cards_0101,
-    (1, 1, 1, 1): None # TODO
-}
+def drop_select(seq, index):
+    drop = seq[index]
+    select = seq[:index] + seq[index+1:]
+    return (drop, select)
+
+def a_encode(five_cards):
+    par_case, rot_num = find_gap_parity_case(five_cards)
+    rotated_hand = rotate(five_cards, rot_num)
+    if par_case == (0, 1, 0, 1, 1): # merge odd gaps at end
+        drop_index = 4
+    elif par_case == (1, 1, 1, 1, 1): # merge odd gaps at beginning
+        drop_index = 1
+    elif par_case == (0, 0, 0, 0, 1): # merge *even* gaps before odd
+        drop_index = 3
+    elif par_case == (0, 0, 1, 1, 1): # merge odd gaps at end
+        drop_index = 4
+    else:
+        raise ValueError("Unrecognized par_case {}".format(par_case))
+    drop_one, select_four = drop_select(rotated_hand, drop_index)
+    sorted_four = tuple(sorted(select_four))
+    poss = possible_cards(sorted_four)
+    i = poss.index(drop_one)
+    return apply_permutation(sorted_four, PERMS_4[i])
+
+def possible_cards(sorted_four):
+    """
+    >>> possible_cards((3, 4, 12, 47)) # case 0101
+    [6, 8, 10, 49, 51, 1]
+    >>> possible_cards((6, 10, 20, 47)) # case 0011
+    [7, 9, 12, 14, 16, 18]
+    """
+    par_case, rot_num = find_gap_parity_case(sorted_four)
+    r = rotate(sorted_four, step=rot_num)
+    if par_case == (0, 1, 0, 1):
+        return possible_cards_between(r[1], r[2]) + possible_cards_between(r[3], r[0])
+    if par_case == (0, 0, 1, 1):
+        return possible_cards_between(r[2], r[3], odd_offset=False) + possible_cards_between(r[3], r[0])
+    if par_case == (1, 1, 1, 1):
+        return possible_cards_between(r[0], r[1])
+    else:
+        raise ValueError("Problem with input {}. par_case={}, rot_num={}".format(sorted_four, par_case, rot_num))
+
 
 def b_decode(four_cards):
     """
@@ -163,7 +200,5 @@ def b_decode(four_cards):
     perm = get_permutation(four_cards)
     i = PERM_4_TO_INDEX[perm]
     sorted_four = tuple(sorted(four_cards))
-    par_case, rot_num = find_gap_parity_case(sorted_four)
-    possible_cards_fn = PAR_4_CASE_TO_POSS_FN[par_case]
-    cards = possible_cards_fn(sorted_four)
+    cards = possible_cards(sorted_four)
     return cards[i]

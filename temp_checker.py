@@ -9,7 +9,7 @@ def check(a_encode, b_decode):
     counts = defaultdict(int)
     for i, five_cards in enumerate(combinations(range(52), 5)):
         par_case, rot_num = solution.find_gap_parity_case(five_cards)
-        if par_case == (0, 1, 0, 1, 1):
+        if True:
             four_cards = a_encode(five_cards)
             assert len(set(four_cards)) == 4, problem_message.format(five_cards, i)
             assert all(c in five_cards for c in four_cards), problem_message.format(five_cards, i)
@@ -21,4 +21,4 @@ def check(a_encode, b_decode):
     print "OK so far! counts: {}".format(counts)
 
 if __name__ == "__main__":
-    check(solution.a_encode_01011, solution.b_decode)
+    check(solution.a_encode, solution.b_decode)
