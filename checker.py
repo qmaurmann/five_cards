@@ -1,16 +1,23 @@
 def check(a_encode, b_decode):
+    """
+    Exhaustively check whether a pair of encode/decode functions solve the
+    problem.
+    """
     from itertools import combinations
-    problem_message = "five_cards={} (case {} of 2598960)"
-    for i, five_cards in enumerate(combinations(range(52), 5)):
+    problem_message = "Problem at sorted_five={} (case {} of 2598960)"
+    for i, sorted_five in enumerate(combinations(range(52), 5)):
         if i % 10000 == 0:
-            print "Progress: {} of 2598960 cases checked. Current case: {}".format(i, five_cards)
-        four_cards = a_encode(five_cards)
-        assert len(set(four_cards)) == 4, problem_message.format(five_cards, i)
-        assert all(c in five_cards for c in four_cards), problem_message.format(five_cards, i)
-        guess = b_decode(four_cards)
-        assert tuple(sorted(four_cards + (guess,))) == five_cards, problem_message.format(five_cards, i)
+            print "Progress: {} of 2598960 cases checked. Current case: {}".format(i, sorted_five)
+        ordered_four = a_encode(sorted_five)
+        assert len(set(ordered_four)) == 4, problem_message.format(sorted_five, i)
+        assert all(c in sorted_five for c in ordered_four), problem_message.format(sorted_five, i)
+        guess = b_decode(ordered_four)
+        assert tuple(sorted(ordered_four + (guess,))) == sorted_five, problem_message.format(sorted_five, i)
     print "All cases pass!"
 
-if __name__ == "__main__":
+def main():
     from solution import a_encode, b_decode
     check(a_encode, b_decode)
+
+if __name__ == "__main__":
+    main()
