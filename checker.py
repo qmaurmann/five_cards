@@ -16,8 +16,16 @@ def check(a_encode, b_decode):
     print "All cases pass!"
 
 def main():
-    from solution import a_encode, b_decode
-    check(a_encode, b_decode)
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Script to check a solution module exporting functions named a_encode and b_decode.")
+    parser.add_argument(
+        "--module_name", "-m", default="solution.py", help="Solution module name or filename (default solution.py)")
+    options = parser.parse_args()
+
+    module_name = options.module_name[:-3] if options.module_name.endswith(".py") else options.module_name
+    m = __import__(module_name, fromlist=["a_encode", "b_decode"])
+    check(m.a_encode, m.b_decode)
 
 if __name__ == "__main__":
     main()
